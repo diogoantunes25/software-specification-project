@@ -145,38 +145,33 @@ function SerializeSingleCode(cs : code) : seq<nat>
   }
 }
 
-function DeserializeCodes(ints : seq<nat>) : seq<code> {
-  DeserializeCodesRec(ints, []) 
-}
-
-function DeserializeCodesRec(ints : seq<nat>, cs: seq<code>) : seq<code>
-
+function DeserializeCodes(ints : seq<nat>) : seq<code>
 {
   if ints == []
-  then cs
+  then []
   else match ints[0] {
     case 0 => 
       if |ints| < 2 then []
       else if |ints[2..]| < ints[1] then []
-      else DeserializeCodesRec(ints[2..][(ints[1])..], [VarCode(ints[2..][..(ints[1])])] + cs)
+      else [VarCode(ints[2..][..(ints[1])])] + DeserializeCodes(ints[2..][(ints[1])..])
     case 1 =>
       if |ints| < 2 then []
-      else DeserializeCodesRec(ints[2..], [ValCode(ints[1])] + cs)
-    case 2 => DeserializeCodesRec(ints[1..], [UnOpCode(Neg)] + cs)
+      else [ValCode(ints[1])] + DeserializeCodes(ints[2..])
+    case 2 => [UnOpCode(Neg)] + DeserializeCodes(ints[1..])
     case 3 => if |ints| < 2
       then []
       else match ints[1] {
-        case 0 => DeserializeCodesRec(ints[2..], [BinOpCode(Plus)] + cs)
-        case 1 => DeserializeCodesRec(ints[2..], [BinOpCode(Minus)] + cs)
+        case 0 => [BinOpCode(Plus)] + DeserializeCodes(ints[2..])
+        case 1 => [BinOpCode(Minus)] + DeserializeCodes(ints[2..])
         case _ => []
       }
     case _ => [] // invalid serialization
   }
 }
 
-// /*
-//   Ex1.4
-// */
+/*
+  Ex1.4
+*/
 lemma DeserializeCodesProperty(cs : seq<code>)
   ensures DeserializeCodes(SerializeCodes(cs)) == cs
 {
@@ -186,13 +181,9 @@ lemma DeserializeCodesProperty(cs : seq<code>)
         DeserializeCodes(SerializeCodes(cs));
       ==
         DeserializeCodes(SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..]));
-      ==
-        DeserializeCodesRec(SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..]), []);
-      == 
-        DeserializeCodes(SerializeSingleCode(cs[0])) + DeserializeCodes(SerializeCodes(cs[1..]));
-      == { DeserializeSingleCodeProperty(cs[0]); }
+      == { DeserializeCodeSingleProperty(cs[0], cs[1..]); }
         [cs[0]] + DeserializeCodes(SerializeCodes(cs[1..]));
-      ==
+      == // induction hypothesis
         [cs[0]] + cs[1..];
       ==
         cs;
@@ -200,73 +191,281 @@ lemma DeserializeCodesProperty(cs : seq<code>)
   }
 }
 
-lemma DeserializeSingleCodeProperty(c : code)
-  ensures DeserializeCodes(SerializeSingleCode(c)) == [c]
+lemma DeserializeCodeSingleProperty(c: code, cs: seq<code>)
+  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
 {
   match c {
     case VarCode(s) => {
-      var ints := [0, |s|] + s;
+      var ints := [0, |s|] + s + SerializeCodes(cs);
       calc {
-          DeserializeCodes(SerializeSingleCode(VarCode(s)));
+          DeserializeCodes(SerializeSingleCode(VarCode(s)) + SerializeCodes(cs));
         ==
-          DeserializeCodesRec([0, |s|] + s, []);
-        == 
-          DeserializeCodesRec(ints, []);
+          DeserializeCodes([0, |s|] + s + SerializeCodes(cs));
         ==
-          DeserializeCodesRec(ints[2..][(ints[1])..], [VarCode(ints[2..][..(ints[1])])] + []);
+          DeserializeCodes(ints);
         ==
-          DeserializeCodesRec([], [VarCode(ints[2..][..(ints[1])])] + []);
+          [VarCode(ints[2..][..(ints[1])])] + DeserializeCodes(ints[2..][(ints[1])..]);
         ==
-          DeserializeCodesRec([], [VarCode(s[..(ints[1])])] + []);
+          [VarCode(s)] + DeserializeCodes(ints[2..][(ints[1])..]);
         ==
-          DeserializeCodesRec([], [VarCode(s[..(|s|)])] + []);
-        == { assert s[..|s|] == s; }
-          DeserializeCodesRec([], [VarCode(s)] + []);
+          [VarCode(s)] + DeserializeCodes(SerializeCodes(cs));
         ==
-          [c];
+          [c] + DeserializeCodes(SerializeCodes(cs));
       }
     }
     case ValCode(i) => calc {
-          DeserializeCodes(SerializeSingleCode(ValCode(i)));
+          DeserializeCodes(SerializeSingleCode(ValCode(i)) + SerializeCodes(cs));
         ==
-          DeserializeCodes([1, i]);
+          DeserializeCodes([1, i] + SerializeCodes(cs));
         ==
-          DeserializeCodes([1, i]);
+          [ValCode(i)] + DeserializeCodes(SerializeCodes(cs));
         ==
-          DeserializeCodesRec([], [ValCode(i)] + []);
-        ==
-          [c];
+          [c] + DeserializeCodes(SerializeCodes(cs));
     }
     case UnOpCode(uop) => calc {
-          DeserializeCodes(SerializeSingleCode(UnOpCode(uop)));
+          DeserializeCodes(SerializeSingleCode(UnOpCode(uop)) + SerializeCodes(cs));
         ==
-          DeserializeCodesRec([], [UnOpCode(Neg)] + []);
-        == {assert uop == Neg;}
-          [c];
+          DeserializeCodes([2] + SerializeCodes(cs));
+        ==
+          [UnOpCode(Neg)] + DeserializeCodes(SerializeCodes(cs));
+        == { assert uop == Neg; }
+          [UnOpCode(uop)] + DeserializeCodes(SerializeCodes(cs));
     }
     // Can i use the match inside a calc ?
     case BinOpCode(bop) => match bop {
       case Plus => calc {
-          DeserializeCodes(SerializeSingleCode(BinOpCode(bop)));
-        == { assert Plus == bop; } // why is this needed?
-          DeserializeCodesRec([], [BinOpCode(Plus)] + []);
+          DeserializeCodes(SerializeSingleCode(BinOpCode(bop)) + SerializeCodes(cs));
+        == { assert bop == Plus; }
+          DeserializeCodes(SerializeSingleCode(BinOpCode(Plus)) + SerializeCodes(cs));
         ==
-          [c];
+          DeserializeCodes([3, 0] + SerializeCodes(cs));
+        ==
+          [BinOpCode(Plus)] + DeserializeCodes(SerializeCodes(cs));
+        == { assert bop == Plus; }
+          [BinOpCode(bop)] + DeserializeCodes(SerializeCodes(cs));
       }
       case Minus => calc {
-          DeserializeCodes(SerializeSingleCode(BinOpCode(bop)));
+          DeserializeCodes(SerializeSingleCode(BinOpCode(bop)) + SerializeCodes(cs));
+        == { assert bop == Minus; }
+          DeserializeCodes(SerializeSingleCode(BinOpCode(Minus)) + SerializeCodes(cs));
         ==
-          DeserializeCodesRec([], [BinOpCode(Minus)] + []);
+          DeserializeCodes([3, 0] + SerializeCodes(cs));
         ==
-          [c];
+          [BinOpCode(Minus)] + DeserializeCodes(SerializeCodes(cs));
+        == { assert bop == Minus; }
+          [BinOpCode(bop)] + DeserializeCodes(SerializeCodes(cs));
       }
     }
   }
 }
 
-// /*
-//   Ex1.5
-// */
+// lemma DeserializeCodePreservation(c : code, cs: seq<code>, l: seq<code>)
+//   ensures DeserializeCodesRec(SerializeSingleCode(c) + SerializeCodes(cs), l) ==
+//           [c] + DeserializeCodesRec(SerializeCodes(cs), l)
+// {
+//   if cs == [] {
+//     calc {
+//         DeserializeCodesRec(SerializeSingleCode(c) + SerializeCodes([]), l);
+//       == { assert SerializeCodes([]) == []; }
+//         DeserializeCodesRec(SerializeSingleCode(c) + [], l);
+//       == { assert SerializeSingleCode(c) + [] == SerializeSingleCode(c); }
+//         DeserializeCodesRec(SerializeSingleCode(c), l);
+//       == { DeserializeSingleCodePropertyStrong(c, l); }
+//         [c] + l;
+//     }
+//   } else {
+//     calc {
+//         DeserializeCodesRec(SerializeSingleCode(c) + SerializeCodes(cs), l);
+//       ==
+//         DeserializeCodesRec(SerializeSingleCode(c) + SerializeCodes(cs), l);
+//       ==
+//         DeserializeCodesRec(SerializeSingleCode(c) + (SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..])), l);
+//       ==
+//         DeserializeCodesRec(SerializeSingleCode(c) + (SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..])), l);
+//       ==
+//         DeserializeCodesRec(SerializeSingleCode(c) + (SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..])), l);
+//       == { DeserializeCodeExchange(c, (SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..])), l); }
+//         DeserializeCodesRec(SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..]), [c] + l);
+//       ==
+//         DeserializeCodesRec(SerializeSingleCode(cs[0]) + SerializeCodes(cs[1..]), [c] + l);
+//       ==
+//         [c] + DeserializeCodesRec(SerializeCodes(cs), l);
+//     }
+//   }
+// }
+
+// lemma DeserializeCodeExchange(c: code, o: seq<nat>, l: seq<code>)
+//   ensures DeserializeCodesRec(SerializeSingleCode(c) + o, l) ==
+//           DeserializeCodesRec(o, l + [c])
+// {
+//   match c {
+//     case VarCode(s) => {
+//       var ints := [0, |s|] + s + o;
+//       calc {
+//           DeserializeCodesRec(SerializeSingleCode(VarCode(s)) + o, l);
+//         ==
+//           DeserializeCodesRec(ints, l);
+//         == 
+//           DeserializeCodesRec(ints[2..][(ints[1])..], l + [VarCode(ints[2..][..(ints[1])])]);
+//         ==
+//           DeserializeCodesRec(o, l + [VarCode(ints[2..][..(ints[1])])]);
+//         == { assert ints[2..][..(ints[1])] == s[..(|s|)]; }
+//           DeserializeCodesRec(o, l + [VarCode(s[..(|s|)])]);
+//         == { assert s[..|s|] == s; }
+//           DeserializeCodesRec(o, l + [VarCode(s)]);
+//       }
+//     }
+//     case ValCode(i) => calc {
+//           DeserializeCodesRec(SerializeSingleCode(ValCode(i)) + o, l);
+//         ==
+//           DeserializeCodesRec(o, l + [ValCode(i)]);
+//     }
+//     case UnOpCode(uop) => calc {
+//           DeserializeCodesRec(SerializeSingleCode(UnOpCode(uop)) + o, l);
+//         == {assert uop == Neg;}
+//           DeserializeCodesRec(o, l + [UnOpCode(uop)]);
+//     }
+//     // Can i use the match inside a calc ?
+//     case BinOpCode(bop) => match bop {
+//       // why can't dafny do this
+//       case Plus => calc { }
+//       case Minus => calc { }
+//     }
+//   }
+
+// }
+
+// lemma DeserializeSingleCodePropertyStrong(c : code, l: seq<code>)
+//   ensures DeserializeCodesRec(SerializeSingleCode(c), l) == [c] + l
+// {
+//   match c {
+//     case VarCode(s) => {
+//       var ints := [0, |s|] + s;
+//       calc {
+//           DeserializeCodesRec(SerializeSingleCode(VarCode(s)), l);
+//         ==
+//           DeserializeCodesRec([0, |s|] + s, l);
+//         ==
+//           DeserializeCodesRec(ints, l);
+//         ==
+//           DeserializeCodesRec(ints[2..][(ints[1])..], [VarCode(ints[2..][..(ints[1])])] + l);
+//         ==
+//           DeserializeCodesRec([], [VarCode(ints[2..][..(ints[1])])] + l);
+//         ==
+//           DeserializeCodesRec([], [VarCode(s[..(ints[1])])] + l);
+//         ==
+//           DeserializeCodesRec([], [VarCode(s[..(|s|)])] + l);
+//         == { assert s[..|s|] == s; }
+//           DeserializeCodesRec([], [VarCode(s)] + l);
+//         ==
+//           [c] + l;
+//       }
+//     }
+//     case ValCode(i) => calc {
+//           DeserializeCodesRec(SerializeSingleCode(ValCode(i)), l);
+//         ==
+//           DeserializeCodesRec([1, i], l);
+//         ==
+//           DeserializeCodesRec([1, i], l);
+//         ==
+//           DeserializeCodesRec([], [ValCode(i)] + l);
+//         ==
+//           [c] + l;
+//     }
+//     case UnOpCode(uop) => calc {
+//           DeserializeCodesRec(SerializeSingleCode(UnOpCode(uop)), l);
+//         ==
+//           DeserializeCodesRec([], [UnOpCode(Neg)] + l);
+//         == {assert uop == Neg;}
+//           [c] + l;
+//     }
+//     // Can i use the match inside a calc ?
+//     case BinOpCode(bop) => match bop {
+//       case Plus => calc {
+//           DeserializeCodesRec(SerializeSingleCode(BinOpCode(bop)), l);
+//         == { assert Plus == bop; } // why is this needed?
+//           DeserializeCodesRec([], [BinOpCode(Plus)] + l);
+//         ==
+//           [c] + l;
+//       }
+//       case Minus => calc {
+//           DeserializeCodesRec(SerializeSingleCode(BinOpCode(bop)), l);
+//         ==
+//           DeserializeCodesRec([], [BinOpCode(Minus)] + l);
+//         ==
+//           [c] + l;
+//       }
+//     }
+//   }
+// }
+
+// lemma DeserializeSingleCodeProperty(c : code)
+//   ensures DeserializeCodes(SerializeSingleCode(c)) == [c]
+// {
+//   match c {
+//     case VarCode(s) => {
+//       var ints := [0, |s|] + s;
+//       calc {
+//           DeserializeCodes(SerializeSingleCode(VarCode(s)));
+//         ==
+//           DeserializeCodesRec([0, |s|] + s, []);
+//         == 
+//           DeserializeCodesRec(ints, []);
+//         ==
+//           DeserializeCodesRec(ints[2..][(ints[1])..], [VarCode(ints[2..][..(ints[1])])] + []);
+//         ==
+//           DeserializeCodesRec([], [VarCode(ints[2..][..(ints[1])])] + []);
+//         ==
+//           DeserializeCodesRec([], [VarCode(s[..(ints[1])])] + []);
+//         ==
+//           DeserializeCodesRec([], [VarCode(s[..(|s|)])] + []);
+//         == { assert s[..|s|] == s; }
+//           DeserializeCodesRec([], [VarCode(s)] + []);
+//         ==
+//           [c];
+//       }
+//     }
+//     case ValCode(i) => calc {
+//           DeserializeCodes(SerializeSingleCode(ValCode(i)));
+//         ==
+//           DeserializeCodes([1, i]);
+//         ==
+//           DeserializeCodes([1, i]);
+//         ==
+//           DeserializeCodesRec([], [ValCode(i)] + []);
+//         ==
+//           [c];
+//     }
+//     case UnOpCode(uop) => calc {
+//           DeserializeCodes(SerializeSingleCode(UnOpCode(uop)));
+//         ==
+//           DeserializeCodesRec([], [UnOpCode(Neg)] + []);
+//         == {assert uop == Neg;}
+//           [c];
+//     }
+//     // Can i use the match inside a calc ?
+//     case BinOpCode(bop) => match bop {
+//       case Plus => calc {
+//           DeserializeCodes(SerializeSingleCode(BinOpCode(bop)));
+//         == { assert Plus == bop; } // why is this needed?
+//           DeserializeCodesRec([], [BinOpCode(Plus)] + []);
+//         ==
+//           [c];
+//       }
+//       case Minus => calc {
+//           DeserializeCodes(SerializeSingleCode(BinOpCode(bop)));
+//         ==
+//           DeserializeCodesRec([], [BinOpCode(Minus)] + []);
+//         ==
+//           [c];
+//       }
+//     }
+//   }
+// }
+
+/*
+  Ex1.5
+*/
 function FullSerialize(e : aexpr) : seq<nat> {
   SerializeCodes(Serialize(e))
 }
@@ -275,9 +474,9 @@ function FullDeserealize(nats : seq<nat>) : seq<aexpr> {
   Deserialize(DeserializeCodes(nats))
 }
 
-// /*
-//   Ex1.6
-// */
+/*
+  Ex1.6
+*/
 lemma FullDeserealizeProperty(e : aexpr)
   ensures FullDeserealize(FullSerialize(e)) == [ e ]
 {
