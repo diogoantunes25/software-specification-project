@@ -186,56 +186,35 @@ lemma DeserializeCodesProperty(cs : seq<code>)
   }
 }
 
-lemma DeserializeCodeSinglePropertyAux(x: seq<nat>, y: seq<nat>, cs: seq<nat>)
-  requires x == [0, |y|] + y + cs
-
-  ensures x[0] == 0
-  ensures x[1] == |y|
-  ensures x[2..(2 + x[1])] == y
-  ensures x[(2 + x[1])..] == cs
-{
-
-}
-
-lemma DeserializeCodeSinglePropertyVarCode(c: code, s: seq<nat>, cs: seq<code>)
-  requires c == VarCode(s)
-
+lemma DeserializeCodeSingleProperty(c: code, cs: seq<code>)
   ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
 {
-    var ints := [0, |s|] + s + SerializeCodes(cs);
-    calc {
-        DeserializeCodes(SerializeSingleCode(VarCode(s)) + SerializeCodes(cs));
-      ==
-        DeserializeCodes([0, |s|] + s + SerializeCodes(cs));
-      == { DeserializeCodeSinglePropertyAux(ints, s, SerializeCodes(cs)); }
-        [VarCode(s)] + DeserializeCodes(SerializeCodes(cs));
-      ==
-        [c] + DeserializeCodes(SerializeCodes(cs));
-  }
-}
-
-lemma DeserializeCodeSinglePropertyValCode(c: code, i: nat, cs: seq<code>)
-  requires c == ValCode(i)
-
-  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
-{
-    calc {
-          DeserializeCodes(SerializeSingleCode(ValCode(i)) + SerializeCodes(cs));
+  match c {
+    case VarCode(s) => {
+      var ints := [0, |s|] + s + SerializeCodes(cs);
+      calc {
+          DeserializeCodes(SerializeSingleCode(VarCode(s)) + SerializeCodes(cs));
         ==
-          DeserializeCodes([1, i] + SerializeCodes(cs));
-        ==
-          [ValCode(i)] + DeserializeCodes(SerializeCodes(cs));
+          DeserializeCodes([0, |s|] + s + SerializeCodes(cs));
+        == 
+          [VarCode(s)] + DeserializeCodes(SerializeCodes(cs));
         ==
           [c] + DeserializeCodes(SerializeCodes(cs));
-  }
-}
-
-lemma DeserializeCodeSinglePropertyUnCode(c: code, op: uop, cs: seq<code>)
-  requires c == UnOpCode(op)
-
-  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
-{
-    calc {
+      }
+    }
+    case ValCode(i) => {
+      calc {
+            DeserializeCodes(SerializeSingleCode(ValCode(i)) + SerializeCodes(cs));
+          ==
+            DeserializeCodes([1, i] + SerializeCodes(cs));
+          ==
+            [ValCode(i)] + DeserializeCodes(SerializeCodes(cs));
+          ==
+            [c] + DeserializeCodes(SerializeCodes(cs));
+      }
+    }
+    case UnOpCode(op) => {
+      calc {
           DeserializeCodes(SerializeSingleCode(UnOpCode(op)) + SerializeCodes(cs));
         ==
           DeserializeCodes([2] + SerializeCodes(cs));
@@ -243,55 +222,27 @@ lemma DeserializeCodeSinglePropertyUnCode(c: code, op: uop, cs: seq<code>)
           [UnOpCode(Neg)] + DeserializeCodes(SerializeCodes(cs));
         == { assert op == Neg; }
           [UnOpCode(op)] + DeserializeCodes(SerializeCodes(cs));
-  }
-}
-
-lemma DeserializeCodeSinglePropertyBinCodePlus(c: code, cs: seq<code>)
-  requires c == BinOpCode(Plus)
-
-  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
-{
-  calc {
-    DeserializeCodes(SerializeSingleCode(BinOpCode(Plus)) + SerializeCodes(cs));
-  ==
-    DeserializeCodes([3, 0] + SerializeCodes(cs));
-  ==
-    [BinOpCode(Plus)] + DeserializeCodes(SerializeCodes(cs));
-  }
-}
-
-lemma DeserializeCodeSinglePropertyBinCodeMinus(c: code, cs: seq<code>)
-  requires c == BinOpCode(Minus)
-
-  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
-{
-  calc {
-      DeserializeCodes(SerializeSingleCode(BinOpCode(Minus)) + SerializeCodes(cs));
-    ==
-      DeserializeCodes([3, 1] + SerializeCodes(cs));
-    ==
-      [BinOpCode(Minus)] + DeserializeCodes(SerializeCodes(cs));
-  }
-}
-
-lemma DeserializeCodeSingleProperty(c: code, cs: seq<code>)
-  ensures DeserializeCodes(SerializeSingleCode(c) + SerializeCodes(cs)) == [c] + DeserializeCodes(SerializeCodes(cs))
-{
-  match c {
-    case VarCode(s) => {
-      DeserializeCodeSinglePropertyVarCode(c, s, cs);
-    }
-    case ValCode(i) => {
-      DeserializeCodeSinglePropertyValCode(c, i, cs);
-    }
-    case UnOpCode(op) => {
-      DeserializeCodeSinglePropertyUnCode(c, op, cs);
+      }
     }
     // Can i use the match inside a calc ?
     case BinOpCode(op) => {
       match op {
-        case Plus => DeserializeCodeSinglePropertyBinCodePlus(c, cs);
-        case Minus => DeserializeCodeSinglePropertyBinCodeMinus(c, cs);
+        case Plus => {
+          calc {
+            DeserializeCodes(SerializeSingleCode(BinOpCode(Plus)) + SerializeCodes(cs));
+          ==
+            DeserializeCodes([3, 0] + SerializeCodes(cs));
+          ==
+            [BinOpCode(Plus)] + DeserializeCodes(SerializeCodes(cs));
+          }
+        }
+        case Minus => calc {
+              DeserializeCodes(SerializeSingleCode(BinOpCode(Minus)) + SerializeCodes(cs));
+            ==
+              DeserializeCodes([3, 1] + SerializeCodes(cs)); // the problem :(
+            ==
+              [BinOpCode(Minus)] + DeserializeCodes(SerializeCodes(cs));
+        }
       }
     }
   }
