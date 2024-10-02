@@ -37,6 +37,7 @@ module Ex4 {
 
     /**
       Checks if the current set contains the value v 
+      Complexity: O(n)
      */
     method mem (v : nat) returns (b : bool)
       requires this.Valid()
@@ -56,6 +57,7 @@ module Ex4 {
 
     /**
       Adds v to the current set 
+      Complexity: O(n)
      */
     method add (v : nat) 
       requires this.Valid()
@@ -64,7 +66,10 @@ module Ex4 {
       ensures this.Valid()
       ensures this.content == old(this.content) + {v}
     {
+      // O(n)
       var b := this.mem(v);
+
+      // O(1)
       if !b {
         if this.list == null {
           this.list := new Ex3.Node(v);
@@ -85,6 +90,7 @@ module Ex4 {
       requires s.Valid()
       requires this.Valid()
 
+      ensures fresh(r)
       ensures r.Valid()
       ensures r.content == s.content + this.content
     {
@@ -130,6 +136,7 @@ module Ex4 {
       requires s.Valid() 
       requires this.Valid() 
 
+      ensures fresh(r)
       ensures r.Valid()
       ensures r.content == s.content * this.content
     {
