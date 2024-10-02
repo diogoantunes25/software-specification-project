@@ -1,4 +1,3 @@
-
 module Ex3 {
 
   class Node {
@@ -8,7 +7,7 @@ module Ex3 {
 
     // shouldn't this be a list ?
     ghost var footprint : set<Node>
-    ghost var content : set<nat> 
+    ghost var content : seq<nat> 
 
     ghost function Valid() : bool 
       reads this, this.footprint 
@@ -20,7 +19,7 @@ module Ex3 {
         then 
           this.footprint == { this }
           && 
-          this.content == { this.val }
+          this.content == [ this.val ]
         else 
           this.next in this.footprint
           &&
@@ -28,33 +27,38 @@ module Ex3 {
           &&      
           this.footprint == { this } + this.next.footprint 
           &&
-          this.content == { this.val } + this.next.content
+          this.content == [ this.val ] + this.next.content
           &&
           this.next.Valid()
     }
 
     constructor (v : nat) 
       ensures Valid() 
-        && next == null && content == { v }
+        && next == null && content == [ v ]
         && footprint == { this } 
         && val == v 
     {
       this.val := v; 
       this.next := null; 
-      this.content := { val }; 
+      this.content := [ val ]; 
       this.footprint := { this };
     } 
 
+    // add v at the start
     method add(v : nat) returns (r : Node)
       requires Valid()
+
       ensures r.Valid()
-      ensures r.content == {v} + this.content
+      ensures r.content == [v] + this.content
       ensures r.footprint == {r} + this.footprint
       ensures fresh(r)
+
+      // not using ghost fields for spec
+      ensures r.val == v;
     {
       r := new Node(v);
       r.next := this;
-      r.content := {v} + this.content;
+      r.content := [v] + this.content;
       r.footprint := {r} + this.footprint;
     }
 
@@ -65,7 +69,7 @@ module Ex3 {
       var cur := this;
       b := false;
 
-      ghost var past := {};
+      ghost var past := [];
       while (cur != null)
         decreases if cur != null then cur.footprint else {}
         invariant cur != null ==> this.content == past + cur.content
@@ -78,7 +82,7 @@ module Ex3 {
           b := true;
           return;
         } else {
-          past := past + { cur.val };
+          past := past + [ cur.val ];
         }
 
         cur := cur.next;
@@ -89,27 +93,43 @@ module Ex3 {
 
     method copy() returns (n : Node)
       requires Valid()
+
+      decreases if this.next != null then footprint else {}
+
       ensures fresh(n.footprint)
-      // ensures Same(n, this)
+      ensures n.Valid()
+      ensures n.content == this.content
     {
+      if this.next == null {
+        n := new Node(this.val);
+        return;
+      } else {
+        var other := this.next.copy();
+        n := other.add(this.val);
+
+        return;
+      }
     }
   }
 
-  function Same(a: Node?, b: Node?): bool
-    requires a != null ==> a.Valid()
-    requires b != null ==> b.Valid()
+  // function Same(a: Node, b: Node): bool
+  //   requires a.Valid()
+  //   requires b.Valid()
 
-    reads a, b
-    reads if a != null then a.footprint else {}
-    reads if b != null then b.footprint else {}
+  //   reads a, b
+  //   reads a.footprint
+  //   reads b.footprint
 
-    decreases if a != null then a.footprint else {}
-  {
-    if a == null
-      then b == null
-      else if b == null
-        then false
-        else a.val == b.val && Same(a.next, b.next)
-  }
+  //   decreases a.footprint
+  // {
+  //   a.val == b.val && (
+  //     if a.next == null
+  //       then b.next == null
+  //       else
+  //         if b.next == null
+  //           then false
+  //           else Same(a.next, b.next)
+  //   )
+  // }
   
 }
