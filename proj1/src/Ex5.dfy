@@ -41,6 +41,7 @@ module Ex5 {
       
     constructor (size : nat) 
       ensures Valid() && this.content == {} && this.footprint == {} && this.size == size
+      ensures fresh(this.tbl)
     {
       // size + 1 because elements might be equal to size
       this.tbl := new bool[size+1](_ => false);
@@ -70,7 +71,7 @@ module Ex5 {
       requires 0 <= v <= size
       requires this.Valid()
 
-      modifies this, this.tbl, this.list
+      modifies this, this.tbl
 
       ensures this.Valid()
       ensures this.size == old(this.size)
@@ -102,8 +103,7 @@ module Ex5 {
 
       ensures fresh(r)
       ensures r.Valid()
-      // ensures r.content == s.content + this.content
-      ensures r.content == s.content
+      ensures r.content == s.content + this.content
     {
       var mSize := max(this.tbl.Length-1, s.tbl.Length-1);
 
@@ -119,23 +119,27 @@ module Ex5 {
 
       while cur != null
         invariant cur != null ==> cur.Valid()
-
         invariant r.Valid()
+
         invariant r.size >= s.size
+        invariant r.size >= this.size
+
+        invariant fresh(r)
+        invariant fresh(r.tbl)
+        invariant r.tbl != s.tbl
 
         invariant cur != null ==> s.list.content == seen + cur.content
-        // invariant cur == null ==> s.content == Ex4.seq2set(seen)
-        // invariant r.content == Ex4.seq2set(seen)
+        invariant cur == null ==> s.content == Ex4.seq2set(seen)
+        invariant r.content == Ex4.seq2set(seen)
 
         decreases if cur != null then cur.footprint else {}
       {
-        // ghost var oldR := r.content;
-        // Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
+        ghost var oldR := r.content;
 
         Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
         assert 0 <= cur.val <= s.size;
         r.add(cur.val);
-        // assert r.content == oldR + {cur.val};
+        assert r.content == oldR + {cur.val};
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
@@ -145,43 +149,42 @@ module Ex5 {
         cur := cur.next;
       }
 
-      assert r.Valid();
+      // O(|s| * |this|)
+      cur := this.list;
 
-      // assert r.content == s.content;
+      seen := [];
+      while cur != null
+        invariant cur != null ==> cur.Valid()
+        invariant r.Valid()
 
-      // // O(|s| * |this|)
-      // cur := this.list;
+        invariant r.size >= this.size
 
-      // seen := [];
-      // while cur != null
-      //   invariant cur != null ==> cur.Valid()
-      //   invariant r.Valid()
-      //   invariant r.size >= this.size
-      //   invariant cur != null ==> this.list.content == seen + cur.content
-      //   invariant cur == null ==> this.content == Ex4.seq2set(seen)
-      //   invariant r.content == s.content + Ex4.seq2set(seen)
+        invariant fresh(r)
+        invariant fresh(r.tbl)
 
-      //   decreases if cur != null then cur.footprint else {}
-      // {
-      //   ghost var oldR := r.content;
-      //   assert cur.val in cur.content;
-      //   assert cur.val in this.list.content;
-      //   Ex4.seq2seqEquiv(this.list.content, this.content, cur.val);
-      //   assert cur.val in this.content;
-      //   assert r.Valid();
-      //   assert 0 <= cur.val < this.tbl.Length;
-      //   assert 0 <= cur.val < r.tbl.Length;
-      //   assert 0 <= cur.val <= r.size;
-      //   r.add(cur.val);
-      //   assert r.content == oldR + {cur.val};
+        invariant r.tbl != this.tbl
+        invariant r != this
 
-      //   ghost var oldSeen := seen;
-      //   seen := seen + [cur.val];
-      //   Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
-      //   Ex4.seq2setAdd(oldSeen, cur.val);
+        invariant cur != null ==> this.list.content == seen + cur.content
+        invariant cur == null ==> this.content == Ex4.seq2set(seen)
+        invariant r.content == Ex4.seq2set(seen) + s.content
 
-      //   cur := cur.next;
-      // }
+        decreases if cur != null then cur.footprint else {}
+      {
+        ghost var oldR := r.content;
+
+        Ex4.seq2seqEquiv(this.list.content, this.content, cur.val);
+        assert 0 <= cur.val <= this.size;
+        r.add(cur.val);
+        assert r.content == oldR + {cur.val};
+
+        ghost var oldSeen := seen;
+        seen := seen + [cur.val];
+        Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
+        Ex4.seq2setAdd(oldSeen, cur.val);
+
+        cur := cur.next;
+      }
     }
 
     // O(n)
@@ -192,8 +195,53 @@ module Ex5 {
       ensures r.Valid()
       ensures r.content == s.content * this.content
     {
-    }
+      var mSize := max(this.tbl.Length-1, s.tbl.Length-1);
 
+      r := new Set(mSize);
+
+      assert r.size >= this.size;
+      assert r.size >= s.size;
+
+      // O(|s| * |s|)
+      var cur := s.list;
+
+      ghost var seen : seq<nat> := [];
+
+      while cur != null
+        invariant cur != null ==> cur.Valid()
+        invariant r.Valid()
+
+        invariant r.size >= s.size
+        invariant r.size >= this.size
+
+        invariant fresh(r)
+        invariant fresh(r.tbl)
+        invariant r.tbl != s.tbl
+
+        invariant cur != null ==> s.list.content == seen + cur.content
+        invariant cur == null ==> s.content == Ex4.seq2set(seen)
+        invariant r.content == Ex4.seq2set(seen) * this.content
+
+        decreases if cur != null then cur.footprint else {}
+      {
+        var b := this.mem(cur.val);
+        if (b) {
+          ghost var oldR := r.content;
+
+          Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
+          assert 0 <= cur.val <= s.size;
+          r.add(cur.val);
+          assert r.content == oldR + {cur.val};
+        }
+
+        ghost var oldSeen := seen;
+        seen := seen + [cur.val];
+        Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
+        Ex4.seq2setAdd(oldSeen, cur.val);
+
+        cur := cur.next;
+      }
+    }
   }
 
   function maxF(a: nat, b: nat): nat
