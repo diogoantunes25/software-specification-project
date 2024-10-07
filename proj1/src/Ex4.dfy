@@ -4,7 +4,7 @@ module Ex4 {
   import Ex3=Ex3
 
   class Set {
-    // without duplicates
+    // Should not have duplicates
     var list : Ex3.Node?
 
     ghost var footprint : set<Ex3.Node>
@@ -22,7 +22,6 @@ module Ex4 {
           footprint == list.footprint
           &&
           content == seq2set(list.content)
-          // content == list.content
           &&
           list.Valid()
     }
@@ -84,7 +83,8 @@ module Ex4 {
     }
 
     /**
-      Computes the union of the current set and the set s given as input 
+      Union of the current set and the set s given as input 
+      Complexity: O(|s| * |this|)
      */
     method union(s : Set) returns (r : Set)
       requires s.Valid()
@@ -132,6 +132,10 @@ module Ex4 {
 
     }
 
+    /**
+      Intersection of the current set and the set s given as input 
+      Complexity: O(|s| * |this|)
+     */
     method inter(s : Set) returns (r : Set)
       requires s.Valid() 
       requires this.Valid() 
@@ -158,7 +162,6 @@ module Ex4 {
           ghost var oldR := r.content;
           r.add(cur.val);
           assert r.content == oldR + {cur.val};
-          // assert cur.val in s.content * this.content;
         }
 
         ghost var oldSeen := seen;
@@ -243,6 +246,9 @@ module Ex4 {
   {
   }
 
+  /**
+    Converts seq to set
+   */
   function seq2set(s: seq<nat>): set<nat>
   {
     if s == [] then {} else {s[0]} + seq2set(s[1..])

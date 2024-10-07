@@ -55,14 +55,15 @@ lemma DeserializeProperty(e : aexpr)
   ensures Deserialize(Serialize(e)) == [ e ]
 {
   match e {
-    // I was expecting the base cases to require 0 stuff
-    case Var(s) => {
-        // Does this need to be in calculational style ?
-        assert(Deserialize(Serialize(e)) == DeserializeRec([VarCode(s)], []));
+    case Var(s) => calc {
+          Deserialize(Serialize(e));
+        ==
+          DeserializeRec([VarCode(s)], []);
     }
-    case Val(i) => {
-        // Does this need to be in calculational style ?
-        assert(Deserialize(Serialize(e)) == DeserializeRec([ValCode(i)], []));
+    case Val(i) => calc {
+          Deserialize(Serialize(e));
+        ==
+          DeserializeRec([ValCode(i)], []);
     }
     case UnOp(op, a1) => calc {
           Deserialize(Serialize(e));
@@ -224,7 +225,6 @@ lemma DeserializeCodeSingleProperty(c: code, cs: seq<code>)
           [UnOpCode(op)] + DeserializeCodes(SerializeCodes(cs));
       }
     }
-    // Can i use the match inside a calc ?
     case BinOpCode(op) => {
       match op {
         case Plus => {

@@ -5,8 +5,13 @@ module Ex3 {
     var val : nat
     var next : Node?
 
-    // shouldn't this be a list ?
     ghost var footprint : set<Node>
+
+    /**
+        NOTE:
+        Changed from set to seq, because seq more naturally represents a list.
+        I believe that this simplified the specs.
+     */
     ghost var content : seq<nat> 
 
     ghost function Valid() : bool 
@@ -44,7 +49,11 @@ module Ex3 {
       this.footprint := { this };
     } 
 
-    // add v at the start
+    /**
+        Add v to start of list.
+        Does not check if element already in list.
+        Complexity: O(1)
+     */
     method add(v : nat) returns (r : Node)
       requires Valid()
 
@@ -52,9 +61,6 @@ module Ex3 {
       ensures r.content == [v] + this.content
       ensures r.footprint == {r} + this.footprint
       ensures fresh(r)
-
-      // not using ghost fields for spec
-      ensures r.val == v;
     {
       r := new Node(v);
       r.next := this;
@@ -62,6 +68,10 @@ module Ex3 {
       r.footprint := {r} + this.footprint;
     }
 
+    /**
+      Membership check
+      Complexity: O(|content|)
+     */
     method mem(v : nat) returns (b : bool)
       requires Valid()
       ensures b == (v in this.content)
@@ -98,6 +108,9 @@ module Ex3 {
 
       ensures fresh(n.footprint)
       ensures n.Valid()
+
+      // This is the property that is more easily expressible since content is seq<nat>.
+      // If content was set, a separate predicate would be needed to ensure order is maintained.
       ensures n.content == this.content
     {
       if this.next == null {
@@ -111,25 +124,4 @@ module Ex3 {
       }
     }
   }
-
-  // function Same(a: Node, b: Node): bool
-  //   requires a.Valid()
-  //   requires b.Valid()
-
-  //   reads a, b
-  //   reads a.footprint
-  //   reads b.footprint
-
-  //   decreases a.footprint
-  // {
-  //   a.val == b.val && (
-  //     if a.next == null
-  //       then b.next == null
-  //       else
-  //         if b.next == null
-  //           then false
-  //           else Same(a.next, b.next)
-  //   )
-  // }
-  
 }

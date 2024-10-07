@@ -38,7 +38,6 @@ method noRepetitionsQuadratic(arr : array<nat>) returns (b: bool)
 method noRepetitionsLinear(arr : array<nat>) returns (b: bool) 
   ensures b == noRepsF(arr[..])
 {
-  // Find max
   var max := 0;
   var i := 0;
   while i < arr.Length
@@ -52,20 +51,14 @@ method noRepetitionsLinear(arr : array<nat>) returns (b: bool)
     i := i + 1;
   }
 
-  // is this still constant?
+  // allocation + initialization assumed to be constant-time
   var present := new bool[max+1](_ => false);
-
-  assert forall i :: 0 <= i <= max ==> present[i] == false;
 
   i := 0;
   while i < arr.Length
       invariant 0 <= i <= arr.Length
       invariant forall j :: 0 <= j < i ==> present[arr[j]] == true
-      invariant i < arr.Length && !present[arr[i]] ==> forall j :: 0 <= j < i ==> arr[j] != arr[i]
-
-      invariant forall v :: (0 <= v <= max && present[v]) ==>
-        exists k :: (0 <= k < i && arr[k] == v)
-
+      invariant forall v :: (0 <= v <= max && present[v]) ==> exists k :: (0 <= k < i && arr[k] == v)
       invariant forall j, k :: 0 <= j < k < i ==> arr[j] != arr[k]
   {
     if present[arr[i]] {
@@ -75,12 +68,9 @@ method noRepetitionsLinear(arr : array<nat>) returns (b: bool)
     }
 
     assert forall k :: 0 <= k < i ==> arr[k] != arr[i];
-    assert present[arr[i]] == false;
     present[arr[i]] := true;
     i := i + 1;
   }
-
-  // forall i, j :: 0 <= i < |v| && 0 <= j < |v| ==> i != j ==> v[i] != v[j]
 
   b := true;
   return;

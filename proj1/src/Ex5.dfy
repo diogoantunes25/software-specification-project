@@ -52,7 +52,10 @@ module Ex5 {
       this.content := {};
     }
 
-    // O(1)
+    /**
+      Checks if the current set contains the value v 
+      Complexity: O(1)
+     */
     method mem (v : nat) returns (b : bool)
       requires this.Valid()
       ensures b == (v in this.content)
@@ -66,17 +69,21 @@ module Ex5 {
       }
     }
     
-    // O(1)
+    /**
+      Adds v to the current set 
+      Complexity: O(1)
+     */
     method add (v : nat) 
       requires 0 <= v <= size
       requires this.Valid()
 
       modifies this, this.tbl
 
-      ensures this.Valid()
       ensures this.size == old(this.size)
-      ensures this.content == old(this.content) + {v}
       ensures this.tbl == old(this.tbl)
+
+      ensures this.Valid()
+      ensures this.content == old(this.content) + {v}
     {
       // to avoid duplicates
       var b := this.mem(v);
@@ -96,7 +103,12 @@ module Ex5 {
       }
     }
 
-    // O(n)
+    /**
+      Union of the current set and the set s given as input 
+      Complexity: O(|this| + |s|)
+
+      (verification of this methods takes a while - removing timeouts might be needed)
+     */
     method union(s : Set) returns (r : Set)
       requires s.Valid()
       requires this.Valid()
@@ -112,11 +124,11 @@ module Ex5 {
       assert r.size >= this.size;
       assert r.size >= s.size;
 
-      // O(|s| * |s|)
       var cur := s.list;
 
       ghost var seen : seq<nat> := [];
 
+      // O(|s|)
       while cur != null
         invariant cur != null ==> cur.Valid()
         invariant r.Valid()
@@ -149,10 +161,10 @@ module Ex5 {
         cur := cur.next;
       }
 
-      // O(|s| * |this|)
       cur := this.list;
 
       seen := [];
+      // O(|this|)
       while cur != null
         invariant cur != null ==> cur.Valid()
         invariant r.Valid()
@@ -175,6 +187,8 @@ module Ex5 {
 
         Ex4.seq2seqEquiv(this.list.content, this.content, cur.val);
         assert 0 <= cur.val <= this.size;
+
+        // O(1)
         r.add(cur.val);
         assert r.content == oldR + {cur.val};
 
@@ -187,11 +201,17 @@ module Ex5 {
       }
     }
 
-    // O(n)
+    /**
+      Union of the current set and the set s given as input 
+      Complexity: O(|s|)
+
+      (verification of this methods takes a while - removing timeouts might be needed)
+     */
     method inter(s : Set) returns (r : Set)
       requires s.Valid() 
       requires this.Valid() 
-
+      
+      ensures fresh(r)
       ensures r.Valid()
       ensures r.content == s.content * this.content
     {
@@ -202,11 +222,11 @@ module Ex5 {
       assert r.size >= this.size;
       assert r.size >= s.size;
 
-      // O(|s| * |s|)
       var cur := s.list;
 
       ghost var seen : seq<nat> := [];
 
+      // O(s)
       while cur != null
         invariant cur != null ==> cur.Valid()
         invariant r.Valid()
@@ -224,12 +244,14 @@ module Ex5 {
 
         decreases if cur != null then cur.footprint else {}
       {
+        // O(1)
         var b := this.mem(cur.val);
         if (b) {
           ghost var oldR := r.content;
 
           Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
           assert 0 <= cur.val <= s.size;
+          // O(1)
           r.add(cur.val);
           assert r.content == oldR + {cur.val};
         }
