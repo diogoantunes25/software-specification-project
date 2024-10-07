@@ -1,7 +1,9 @@
 include "Ex3.dfy"
+include "SeqAndSet.dfy"
 
 module Ex4 {
   import Ex3=Ex3
+  import SAS=SeqAndSet
 
   class Set {
     // Should not have duplicates
@@ -21,7 +23,7 @@ module Ex4 {
         else 
           footprint == list.footprint
           &&
-          content == seq2set(list.content)
+          content == SAS.seq2set(list.content)
           &&
           list.Valid()
     }
@@ -49,7 +51,7 @@ module Ex4 {
         b := this.list.mem(v);
 
         // to understand that the mem check extends to this content
-        seq2seqEquiv(this.list.content, this.content, v);
+        SAS.seq2seqEquiv(this.list.content, this.content, v);
         return;
       }
     }
@@ -100,7 +102,7 @@ module Ex4 {
       if s.list != null {
         r.list := s.list.copy();
         r.footprint := r.list.footprint;
-        r.content := seq2set(r.list.content);
+        r.content := SAS.seq2set(r.list.content);
       }
 
       assert r.content == s.content;
@@ -113,8 +115,8 @@ module Ex4 {
         invariant cur != null ==> cur.Valid()
         invariant r.Valid()
         invariant cur != null ==> this.list.content == seen + cur.content
-        invariant cur == null ==> this.content == seq2set(seen)
-        invariant r.content == s.content + seq2set(seen)
+        invariant cur == null ==> this.content == SAS.seq2set(seen)
+        invariant r.content == s.content + SAS.seq2set(seen)
 
         decreases if cur != null then cur.footprint else {}
       {
@@ -124,8 +126,8 @@ module Ex4 {
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
-        seq2seqEquiv(seen, seq2set(seen), cur.val);
-        seq2setAdd(oldSeen, cur.val);
+        SAS.seq2seqEquiv(seen, SAS.seq2set(seen), cur.val);
+        SAS.seq2setAdd(oldSeen, cur.val);
 
         cur := cur.next;
       }
@@ -153,8 +155,8 @@ module Ex4 {
         invariant cur != null ==> cur.Valid()
         invariant r.Valid()
         invariant cur != null ==> this.list.content == seen + cur.content
-        invariant cur == null ==> this.content == seq2set(seen)
-        invariant r.content == s.content * seq2set(seen)
+        invariant cur == null ==> this.content == SAS.seq2set(seen)
+        invariant r.content == s.content * SAS.seq2set(seen)
         decreases if cur != null then cur.footprint else {}
       {
         var inIntersection := s.mem(cur.val);
@@ -166,91 +168,12 @@ module Ex4 {
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
-        seq2seqEquiv(seen, seq2set(seen), cur.val);
-        seq2setAdd(oldSeen, cur.val);
+        SAS.seq2seqEquiv(seen, SAS.seq2set(seen), cur.val);
+        SAS.seq2setAdd(oldSeen, cur.val);
 
         cur := cur.next;
       }
 
     }
-  }
-
-  lemma seq2setAdd(s: seq<nat>, k: nat)
-  ensures seq2set(s + [k]) == seq2set(s) + {k}
-  {
-    if s == [] {
-    } else {
-      calc {
-            seq2set(s + [k]);
-          == { assert s == [s[0]] + s[1..]; }
-            seq2set(([s[0]] + s[1..]) + [k]);
-          == { assert ([s[0]] + s[1..]) + [k] == [s[0]] + (s[1..] + [k]);}
-            seq2set([s[0]] + (s[1..] + [k]));
-          ==
-            seq2set(s) + {k};
-      }
-    }
-  }
-
-  lemma seq2seqEquiv(s: seq<nat>, c: set<nat>, k: nat)
-    requires c == seq2set(s)
-
-    ensures k in c <==> k in s
-  {
-    if k in c {
-      seq2seqEquivAux(s, c, k);
-      assert k in s;
-
-    } else {
-      if k in s {
-          // contradiction
-          seq2seqEquivAux2(s, c, k);
-          assert k in c;
-      } else {
-
-      }
-    }
-  }
-
-  lemma seq2seqEquivAux(s: seq<nat>, c: set<nat>, k: nat)
-    requires c == seq2set(s)
-    requires k in c
-    
-    ensures k in s
-  {
-    if s == [] {
-    } else {
-      if k == s[0] {
-      } else {
-        seq2seqEquivAux(s[1..], seq2set(s[1..]), k);
-      }
-    }
-
-  }
-
-  lemma seq2seqEquivAux2(s: seq<nat>, c: set<nat>, k: nat)
-    requires c == seq2set(s)
-    requires k in s
-    
-    ensures k in c
-  {
-    if s[0] == k {
-    } else {
-      seq2seqEquivAux2(s[1..], seq2set(s[1..]), k);
-    }
-  }
-
-  lemma seq2setGood(s1: seq<nat>, s2: seq<nat>)
-    requires s1 == s2
-    ensures seq2set(s1) == seq2set(s2)
-  {
-  }
-
-  /**
-    Converts seq to set
-   */
-  function seq2set(s: seq<nat>): set<nat>
-  {
-    if s == [] then {} else {s[0]} + seq2set(s[1..])
   }
 }

@@ -1,12 +1,11 @@
 include "Ex3.dfy"
-include "Ex4.dfy"
+include "SeqAndSet.dfy"
 
 module Ex5 {
   
   import Ex3=Ex3
 
-  // Just for theorems about sets and seqs
-  import Ex4=Ex4
+  import SAS=SeqAndSet
 
   class Set {
     var tbl : array<bool>  
@@ -34,7 +33,7 @@ module Ex5 {
           content == {}
         else
           footprint == this.list.footprint &&
-          content == Ex4.seq2set(this.list.content) &&
+          content == SAS.seq2set(this.list.content) &&
           list.Valid()
       )
     }
@@ -141,22 +140,22 @@ module Ex5 {
         invariant r.tbl != s.tbl
 
         invariant cur != null ==> s.list.content == seen + cur.content
-        invariant cur == null ==> s.content == Ex4.seq2set(seen)
-        invariant r.content == Ex4.seq2set(seen)
+        invariant cur == null ==> s.content == SAS.seq2set(seen)
+        invariant r.content == SAS.seq2set(seen)
 
         decreases if cur != null then cur.footprint else {}
       {
         ghost var oldR := r.content;
 
-        Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
+        SAS.seq2seqEquiv(s.list.content, s.content, cur.val);
         assert 0 <= cur.val <= s.size;
         r.add(cur.val);
         assert r.content == oldR + {cur.val};
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
-        Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
-        Ex4.seq2setAdd(oldSeen, cur.val);
+        SAS.seq2seqEquiv(seen, SAS.seq2set(seen), cur.val);
+        SAS.seq2setAdd(oldSeen, cur.val);
 
         cur := cur.next;
       }
@@ -178,14 +177,14 @@ module Ex5 {
         invariant r != this
 
         invariant cur != null ==> this.list.content == seen + cur.content
-        invariant cur == null ==> this.content == Ex4.seq2set(seen)
-        invariant r.content == Ex4.seq2set(seen) + s.content
+        invariant cur == null ==> this.content == SAS.seq2set(seen)
+        invariant r.content == SAS.seq2set(seen) + s.content
 
         decreases if cur != null then cur.footprint else {}
       {
         ghost var oldR := r.content;
 
-        Ex4.seq2seqEquiv(this.list.content, this.content, cur.val);
+        SAS.seq2seqEquiv(this.list.content, this.content, cur.val);
         assert 0 <= cur.val <= this.size;
 
         // O(1)
@@ -194,8 +193,8 @@ module Ex5 {
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
-        Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
-        Ex4.seq2setAdd(oldSeen, cur.val);
+        SAS.seq2seqEquiv(seen, SAS.seq2set(seen), cur.val);
+        SAS.seq2setAdd(oldSeen, cur.val);
 
         cur := cur.next;
       }
@@ -239,8 +238,8 @@ module Ex5 {
         invariant r.tbl != s.tbl
 
         invariant cur != null ==> s.list.content == seen + cur.content
-        invariant cur == null ==> s.content == Ex4.seq2set(seen)
-        invariant r.content == Ex4.seq2set(seen) * this.content
+        invariant cur == null ==> s.content == SAS.seq2set(seen)
+        invariant r.content == SAS.seq2set(seen) * this.content
 
         decreases if cur != null then cur.footprint else {}
       {
@@ -249,7 +248,7 @@ module Ex5 {
         if (b) {
           ghost var oldR := r.content;
 
-          Ex4.seq2seqEquiv(s.list.content, s.content, cur.val);
+          SAS.seq2seqEquiv(s.list.content, s.content, cur.val);
           assert 0 <= cur.val <= s.size;
           // O(1)
           r.add(cur.val);
@@ -258,8 +257,8 @@ module Ex5 {
 
         ghost var oldSeen := seen;
         seen := seen + [cur.val];
-        Ex4.seq2seqEquiv(seen, Ex4.seq2set(seen), cur.val);
-        Ex4.seq2setAdd(oldSeen, cur.val);
+        SAS.seq2seqEquiv(seen, SAS.seq2set(seen), cur.val);
+        SAS.seq2setAdd(oldSeen, cur.val);
 
         cur := cur.next;
       }
