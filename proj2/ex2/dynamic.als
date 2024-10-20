@@ -69,7 +69,7 @@ fun ArcInLeaderQueue: Member -> lone Member {
 }
 
 abstract sig Step {}
-one sig LeaderPromotionStep, LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
+one sig MemberExitStep, LeaderPromotionStep, LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
 one sig StepState {
 	var s: Step
 }
@@ -142,6 +142,8 @@ pred topologyChange {
 	some m: Member | leaderApplication[m]
 	or
 	some m: Member | leaderPromotion[m]
+	or
+	some m: Member | memberExit[m]
 }
 
 // Non-member n applies to become member by joining m's queue
@@ -301,10 +303,34 @@ pred leaderPromotion[m: Member] {
 // m exits the ring
 pred memberExit[m: Member] {
 	// Pre conditions
+	// m is not the leader
+	m not in Leader
+	// m is not in the leader queue
+	m not in LQueue
+	// m's member queue is empty
+	no m.qnxt
+	// all its messages are sent
+	sndr.m in SentMsg
 
 	// Post conditions
+	// previous points to next
+	nxt' = nxt - (m -> m.nxt) - (nxt.m -> m) + (nxt.m -> m.nxt)
+	// remove node from members
+	Member' = Member - m
 
 	// Frame conditions
+	Leader' = Leader
+	LQueue' = LQueue	
+	SentMsg' = SentMsg
+	SendingMsg' = SendingMsg
+	PendingMsg' = PendingMsg
+
+	outbox' = outbox
+	qnxt' = qnxt
+	lnxt' = lnxt
+	rcvrs' = rcvrs
+
+	StepState.s' = MemberExitStep
 }
 
 // Message routing state transformers
@@ -323,6 +349,5 @@ fact {
 
 run example {
 	no Msg
-	eventually some m: Member | leaderPromotion[m]
-} for 3 but exactly 3 Node
+} for 3 but exactly 3 Node, 20 steps
 
