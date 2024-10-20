@@ -111,6 +111,9 @@ fact {
 	// Sending messages haven't been received by sender
 	all m: SendingMsg | m.sndr not in m.rcvrs
 
+	// Only leader can have sending messages
+	SendingMsg.sndr = Leader
+
 	// FIXME: I feel like there should be more restrictions, but I'm not quite
 	// sure which
 	// I could require the sndr to be a member, but I don't see the point
@@ -139,8 +142,14 @@ fact {
 	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
 }
 
-run example {
+run example1 {
+	some lnxt
+
+	// Force two member queues (one at the leader)
+	some (Member - Leader).qnxt
+	some Leader.qnxt
+	
 	some SentMsg
 	some SendingMsg
 	some PendingMsg
-}
+} for exactly 5 Node, 3 Msg
