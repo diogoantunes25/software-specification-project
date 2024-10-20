@@ -26,7 +26,10 @@ fun MQueue[m: Member]: set Node {
 }
 
 abstract sig Msg {
+	// Node where message originates
 	sndr: Node,
+
+	// Nodes that have received the message
 	rcvrs: set Node
 }
 
@@ -88,9 +91,56 @@ fact {
 }
 
 // Message consistency-constraints
-fact {}
+fact {
+
+	// ===============================================
+	// SentMsg constraints
+
+	// Pending messages are only in outbox of sender
+	all m: PendingMsg | outbox.m = m.sndr
+
+	// Pending messages have no receivers
+	no PendingMsg.rcvrs
+
+	// ===============================================
+	// SendingMsg constraints
+
+	// Sending messages are in some outbox that not of the sender
+	all m: SendingMsg | some (outbox.m - m.sndr)
+
+	// Sending messages haven't been received by sender
+	all m: SendingMsg | m.sndr not in m.rcvrs
+
+	// FIXME: I feel like there should be more restrictions, but I'm not quite
+	// sure which
+	// I could require the sndr to be a member, but I don't see the point
+
+	// ===============================================
+	// SentMsg constraints
+
+	// Sent messages are in not outbox
+	no outbox.SentMsg
+
+	// Sent messages have been received by leader
+	all m: SentMsg | m.sndr in m.rcvrs
+
+	// Sent messages have been received by someone that is not the leader
+	// This disallows sending messages to oneself
+	// FIXME: check if this is needed
+	all m: SentMsg | some m.rcvrs - m.sndr
+
+	// ===============================================
+	// Other constraints
+
+	// If a not pending message is in someone outbox, then it the node has received the message
+	// In other words, the outbox of a node minus the pending is a subset of what he has received
+	all n: Node | (n.outbox - PendingMsg) in rcvrs.n
+
+	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
+}
 
 run example {
-	no Msg
-	no lnxt
+	some SentMsg
+	some SendingMsg
+	some PendingMsg
 }
