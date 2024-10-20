@@ -20,6 +20,11 @@ one sig Leader in Member {
 // Set of nodes in leader queue
 sig LQueue in Member {}
 
+// Set of nodes in member queue
+fun MQueue[m: Member]: set Node {
+	(m.qnxt).Node
+}
+
 abstract sig Msg {
 	sndr: Node,
 	rcvrs: set Node
@@ -40,41 +45,46 @@ fun ArcInLeaderQueue: Member -> lone Member {
 
 // Topological constraints
 fact {
+
+	// ===============================================
+	// Ring constraints
+
 	// There's a single ring, not multiple small rings
 	all n: Member | Member = n.*(nxt)
 
-	// Members can't appear in member queues
-	no (Node.(Member.qnxt) & Member)
+	// ===============================================
+	// Leader Queue constraints
 
-	// The member queues are not multiple small queues
-	// In particular, if there's a queue, the member can reach
-	// everyone in the queue using the next
-	// Node.(n.qnxt) => all people in the queue
-	// n.^(n.qnxt) => all people reachable from n using the nxt of the queue
-	all n: Member | Node.(n.qnxt) = n.^(n.qnxt)
+	// Leader queue are the members from which lnxt points
+	LQueue = (Leader.lnxt).Member
 
-	// Only non-leader members appear in leader queue
-	no (Member.(Leader.lnxt) & Leader)
+	// The leader queue ends in the leader
+	all m: LQueue | Leader in m.^(Leader.lnxt)
 
-	// Leader queue are the members to which lnxt points
-	LQueue = Member.(Leader.lnxt)
+	// No loops in leader queue
+	all m: LQueue | m not in m.^(Leader.lnxt)
 
-	// The leader queues are not multiple small queues
-	// In particular, if there's a queue, the leader can reach
-	// everyone in the queue using the next
-	// Member.(Leader.lnxt) => all members in the queue
-	// Leader.^(Leader.qnxt) => all members reachable from leader
-	LQueue = Leader.^(Leader.lnxt)
+	// Only one start in leader queue
+	// Member.(Leader.lnxt) = members pointed to by someone
+	lone (LQueue - Member.(Leader.lnxt))
 
-	// Leader queue should be injective
-	// FIXME: why doesn't this work?
-	// Leader.lnxt in Member one -> lone Member
+	// ===============================================
+	// Member Queue constraints
 
-	// Leader queue should be injective
-	all m: LQueue | one (Leader.lnxt).m
-	
-	// Member queues should be injective and node can only be in a single member queue
-	all n: Node | lone (Member.qnxt).n
+	// The member queue ends in the member
+	all m: Member, n: MQueue[m] | m in n.^(m.qnxt)
+
+	// No loops in member queues
+	all m: Member, n: MQueue[m] | n not in n.^(m.qnxt)
+
+	// Only non-member is member queues
+	all m: Member | no (MQueue[m] & Member)
+
+	// Only one starrts in member queue
+	all m: Member | lone (MQueue[m] - Node.(m.qnxt))
+
+	// Queues are disjoint
+	all disj m1, m2: Member | no (MQueue[m1] & MQueue[m2])
 }
 
 // Message consistency-constraints
@@ -82,4 +92,5 @@ fact {}
 
 run example {
 	no Msg
+	no lnxt
 }
