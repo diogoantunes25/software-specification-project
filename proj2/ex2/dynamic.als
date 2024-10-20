@@ -28,6 +28,12 @@ fun LTail: one Member {
 	LQueue - Member.(Leader.lnxt)
 }
 
+// Head of leader queue
+// FIXME: lone instead of one
+fun LHead: one Member {
+	(Leader.lnxt).Leader
+}
+
 // Set of nodes in member queue
 fun MQueue[m: Member]: set Node {
 	(m.qnxt).Node
@@ -63,7 +69,7 @@ fun ArcInLeaderQueue: Member -> lone Member {
 }
 
 abstract sig Step {}
-one sig LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
+one sig LeaderPromotionStep, LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
 one sig StepState {
 	var s: Step
 }
@@ -134,6 +140,8 @@ pred topologyChange {
 	some n: Node, m: Member | nonMemberExit[n,m]
 	or
 	some m: Member | leaderApplication[m]
+	or
+	some m: Member | leaderPromotion[m]
 }
 
 // Non-member n applies to become member by joining m's queue
@@ -256,6 +264,49 @@ pred leaderApplication[m: Member] {
 	StepState.s' = LeaderApplicationStep
 }
 
+// m becomes the new leader
+pred leaderPromotion[m: Member] {
+	// Pre conditions
+	// member is the head of the queue
+	m = LHead
+	// no ongoing broadcasts
+	no SendingMsg
+	// leader has sent all its messages
+	no (Leader.outbox & PendingMsg)
+
+	// Post conditions
+	// head is the new leader
+	LHead = Leader'
+	// old leader has no longer a leader queue
+	// no Leader.(lnxt') // if Leader is no longer leader, it doesn't have a leader queue
+	// leader queue is moved to new leader
+	LHead.(lnxt') = Leader.lnxt - (LHead -> Leader)
+	// new leader is removed from leader queue
+	LQueue' = LQueue - LHead
+
+	// Frame conditions
+	Member' = Member
+	SentMsg' = SentMsg
+	SendingMsg' = SendingMsg
+	PendingMsg' = PendingMsg
+
+	outbox' = outbox
+	nxt' = nxt
+	qnxt' = qnxt
+	rcvrs' = rcvrs
+
+	StepState.s' = LeaderPromotionStep
+}
+
+// m exits the ring
+pred memberExit[m: Member] {
+	// Pre conditions
+
+	// Post conditions
+
+	// Frame conditions
+}
+
 // Message routing state transformers
 pred messageRoute {
 
@@ -271,5 +322,7 @@ fact {
 }
 
 run example {
+	no Msg
+	eventually some m: Member | leaderPromotion[m]
 } for 3 but exactly 3 Node
 
