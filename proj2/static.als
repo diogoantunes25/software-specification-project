@@ -106,17 +106,13 @@ fact {
 	// SendingMsg constraints
 
 	// Sending messages are in some outbox that not of the sender
-	all m: SendingMsg | some (outbox.m - m.sndr)
+	// all m: SendingMsg | some (outbox.m - m.sndr)
 
 	// Sending messages haven't been received by sender
 	all m: SendingMsg | m.sndr not in m.rcvrs
 
 	// Only leader can have sending messages
-	SendingMsg.sndr = Leader
-
-	// FIXME: I feel like there should be more restrictions, but I'm not quite
-	// sure which
-	// I could require the sndr to be a member, but I don't see the point
+	no SendingMsg.sndr - Leader
 
 	// ===============================================
 	// SentMsg constraints
@@ -135,9 +131,12 @@ fact {
 	// ===============================================
 	// Other constraints
 
+	// A message can only be in one outbox
+	all m: Msg | lone outbox.m
+
 	// If a not pending message is in someone outbox, then it the node has received the message
 	// In other words, the outbox of a node minus the pending is a subset of what he has received
-	all n: Node | (n.outbox - PendingMsg) in rcvrs.n
+	// all n: Node | (n.outbox - PendingMsg) in rcvrs.n
 
 	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
 }

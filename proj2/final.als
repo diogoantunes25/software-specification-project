@@ -1,3 +1,5 @@
+module dynamic
+
 sig Node {
 	// Pending messages from node + sending messages from other nodes
 	var outbox: set Msg
@@ -150,18 +152,22 @@ pred topologyChange {
 	some m: Member | memberExit[m]
 }
 
-// Non-member n applies to become member by joining m's queue
-pred memberApplication[n: Node, m: Member] {
-	// Pre conditions
+pred memberApplicationEnabled[n: Node, m: Member] {
 	// node is not a member
 	n not in Member
 	// node is not already waiting to join in some queue
 	n not in (Member.qnxt).Node
+}
+
+// Non-member n applies to become member by joining m's queue
+pred memberApplication[n: Node, m: Member] {
+	// Pre conditions
+	memberApplicationEnabled[n,m]
 
 	// Post conditions
 	// if there was no queue, now there's a queue
 	no (m.qnxt) implies m.qnxt' = (n -> m) + m.qnxt
-			    else m.qnxt' = (n -> MTail[m]) + m.qnxt
+			    else m.qnxt' = (n -> MTail[m]) + m.qnxt	
 
 	// Frame conditions
 	Member' = Member
@@ -180,11 +186,15 @@ pred memberApplication[n: Node, m: Member] {
 	StepState.s' = MemberApplicationStep
 }
 
+pred memberPromotionEnabled[m: Member] {
+	// there are nodes in member queue of m
+	some m.qnxt
+}
+
 // Member m promotes head of member queue to member
 pred memberPromotion[m: Member] {
 	// Pre conditions
-	// there are nodes in member queue of m
-	some m.qnxt
+	memberPromotionEnabled[m]
 
 	// Post conditions
 	// remove head from queue
@@ -245,10 +255,14 @@ pred nonMemberExit[n: Node, m: Member] {
 	StepState.s' = NonMemberExitStep
 }
 
+pred leaderApplicationEnabled[m: Member] {
+	m not in (Leader + LQueue)
+}
+
 // Member m applies to be the leader
 pred leaderApplication[m: Member] {
 	// Pre conditions
-	m not in (Leader + LQueue)
+	leaderApplicationEnabled[m]
 
 	// Post conditions
 	LQueue' = LQueue + m
@@ -270,15 +284,19 @@ pred leaderApplication[m: Member] {
 	StepState.s' = LeaderApplicationStep
 }
 
-// m becomes the new leader
-pred leaderPromotion[m: Member] {
-	// Pre conditions
+pred leaderPromotionEnabled[m: Member] {
 	// member is the head of the queue
 	m = LHead
 	// no ongoing broadcasts
 	no SendingMsg
 	// leader has sent all its messages
 	no (Leader.outbox & PendingMsg)
+}
+
+// m becomes the new leader
+pred leaderPromotion[m: Member] {
+	// Pre conditions
+	leaderPromotionEnabled[m]
 
 	// Post conditions
 	// head is the new leader
@@ -346,15 +364,19 @@ pred messageRoute {
 	some msg: Msg | broadcastTerm[msg]
 }
 
-// Leader sends message to next node
-pred broadcastInit[msg: Msg] {
-	// Pre conditions
+pred broadcastInitEnabled[msg: Msg] {
 	// message is pending
 	msg in PendingMsg
 	// message is from leader
 	msg.sndr = Leader
 	// the ring is not just the leader
 	some Member - Leader
+}
+
+// Leader sends message to next node
+pred broadcastInit[msg: Msg] {
+	// Pre conditions
+	broadcastInitEnabled[msg]
 
 	// Post conditions
 	// message is not sending
@@ -380,15 +402,20 @@ pred broadcastInit[msg: Msg] {
 	StepState.s' = BrodcastInitStep
 }
 
-// member m redirects msg to next node
-pred redirect[m: Member, msg: Msg] {
-	// Pre conditions
+pred redirectEnabled[m: Member, msg: Msg] {
 	// message should have been broadcasted
 	msg in SendingMsg
 	// message should be in members outbox
 	msg in m.outbox
 	// member can't be the sender
 	m != msg.sndr
+
+}
+
+// member m redirects msg to next node
+pred redirect[m: Member, msg: Msg] {
+	// Pre conditions
+	redirectEnabled[m,msg]
 
 	// Post conditions
 	// only member gets new message and it's msg
@@ -414,13 +441,17 @@ pred redirect[m: Member, msg: Msg] {
 	StepState.s' = RedirectStep
 }
 
-// leader receives back one of the previous messages
-pred broadcastTerm[msg: Msg] {
-	// Pre conditions
+pred broadcastTermEnabled[msg: Msg] {
 	// message broadcast should be ongoing
 	msg in SendingMsg
 	// message should be in leader's outbox
 	msg in Leader.outbox
+}
+
+// leader receives back one of the previous messages
+pred broadcastTerm[msg: Msg] {
+	// Pre conditions
+	broadcastTermEnabled[msg]
 
 	// Post conditions
 	// only leader gets new message and it's msg
@@ -449,24 +480,192 @@ pred system {
 	always trans
 }
 
+// Topological constraints
+pred topologyValid {
+
+	// ===============================================
+	// Ring constraints
+
+	// There's a single ring, not multiple small rings
+	all n: Member | Member = n.*(nxt)
+
+	// ===============================================
+	// Leader Queue constraints
+
+	// Leader queue are the members from which lnxt points
+	LQueue = (Leader.lnxt).Member
+
+	// The leader queue ends in the leader
+	all m: LQueue | Leader in m.^(Leader.lnxt)
+
+	// No loops in leader queue
+	all m: LQueue | m not in m.^(Leader.lnxt)
+
+	// Only one start in leader queue
+	// Member.(Leader.lnxt) = members pointed to by someone
+	lone (LQueue - Member.(Leader.lnxt))
+
+	// ===============================================
+	// Member Queue constraints
+
+	// The member queue ends in the member
+	all m: Member, n: MQueue[m] | m in n.^(m.qnxt)
+
+	// No loops in member queues
+	all m: Member, n: MQueue[m] | n not in n.^(m.qnxt)
+
+	// Only non-member is member queues
+	all m: Member | no (MQueue[m] & Member)
+
+	// Only one starrts in member queue
+	all m: Member | lone (MQueue[m] - Node.(m.qnxt))
+
+	// Queues are disjoint
+	all disj m1, m2: Member | no (MQueue[m1] & MQueue[m2])
+}
+
+// Message consistency-constraints
+pred messageValid {
+
+	// ===============================================
+	// SentMsg constraints
+
+	// Pending messages are only in outbox of sender
+	all m: PendingMsg | outbox.m = m.sndr
+
+	// Pending messages have no receivers
+	no PendingMsg.rcvrs
+
+	// ===============================================
+	// SendingMsg constraints
+
+	// Sending messages haven't been received by sender
+	all m: SendingMsg | m.sndr not in m.rcvrs
+
+	// Only leader can have sending messages
+	no SendingMsg.sndr - Leader
+
+	// ===============================================
+	// SentMsg constraints
+
+	// Sent messages are in not outbox
+	no outbox.SentMsg
+
+	// Sent messages have been received by leader
+	all m: SentMsg | m.sndr in m.rcvrs
+
+	// Sent messages have been received by someone that is not the leader
+	// This disallows sending messages to oneself
+	// FIXME: check if this is needed
+	all m: SentMsg | some m.rcvrs - m.sndr
+
+	// ===============================================
+	// Other constraints
+
+	// A message can only be in one outbox
+	all m: Msg | lone outbox.m
+
+	// If a not pending message is in someone outbox, then it the node has received the message
+	// In other words, the outbox of a node minus the pending is a subset of what he has received
+	// all n: Node | (n.outbox - PendingMsg) in rcvrs.n
+
+	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
+}
+
+pred valid {
+	always (topologyValid and messageValid)
+}
+
+assert validityInvariant {
+	system implies valid
+}
+
+pred fairnessMemberApplication {
+ 	all m: Member, n: Node |
+		((eventually always memberApplicationEnabled[n,m]) implies
+			(always eventually memberApplication[n,m]))
+}
+
+pred fairnessMemberPromotion {
+	all m: Member | 
+		(eventually always memberPromotionEnabled[m] implies always eventually memberPromotion[m])
+}
+
+pred fairnessLeaderApplication {
+	all m: Member |
+		((eventually always leaderApplicationEnabled[m]) implies (always eventually leaderApplication[m]))
+}
+
+pred fairnessLeaderPromotion {
+	all m: Member |
+		(eventually always leaderPromotionEnabled[m] implies always eventually leaderPromotion[m])
+}
+
+pred fairnessBroadcastInit {
+	all msg: Msg |
+		(eventually always broadcastInitEnabled[msg] implies always eventually broadcastInit[msg])
+}
+
+pred fairnessRedirect {
+	all msg: Msg, m: Member |
+		(eventually always redirectEnabled[m,msg] implies always eventually redirect[m,msg])
+}
+
+pred fairnessBroadcastTerm {
+	all msg: Msg |
+		(eventually always broadcastTermEnabled[msg] implies always eventually broadcastTerm[msg])
+}
+
+// always operator added when the set the predicate is quantifying over is mutable
+// when that happens the quantification must be done at all instants
+pred fairness {
+	// Eventually every node should be able to join a member queue
+	always fairnessMemberApplication
+
+	// Eventually every node should be able to become a member
+	always fairnessMemberPromotion
+
+	// Eventually every member should become a leader
+	always fairnessLeaderApplication
+	always fairnessLeaderPromotion
+
+	// Eventually every leader should send it's messages
+	fairnessBroadcastInit
+	always fairnessRedirect
+	fairnessBroadcastTerm
+}
+
+// no exit operations are performed
+pred noExit {
+	always no { n: Node, m: Member | nonMemberExit[n,m] }
+	and
+	always no { m: Member | memberExit[m] }
+}
+
+pred atLeastTwoNodes {
+	some Node - Leader
+}
+
+// all broadcasts terminate
+// FIXME: all broadcasts terminate or all messages are sent ?
+pred allBroadcastsTerminate {
+	eventually Msg = SentMsg
+}
+
+assert allTerminate3a {
+	(atLeastTwoNodes and fairness and noExit) implies allBroadcastsTerminate
+}
+
+assert allTerminate4 {
+	(atLeastTwoNodes and fairness) implies allBroadcastsTerminate
+}
+
 fact {
 	system
 }
 
-run example {
-	// at least one leader promotion
-	eventually some m: Member | leaderPromotion[m]
+// check validityInvariant
 
-	// at least one member promotion
-	eventually some m: Member | memberPromotion[m]
+// check allTerminate3a
 
-	// at least one member exit
-	eventually some m: Member | memberExit[m]
-
-	// at least one non-member exist
-	eventually some n: Node, m: Member | nonMemberExit[n,m]
-
-	// eventually  one complete broadcast
-	eventually some SentMsg
-} for exactly 5 Node, exactly 3 Msg, 20 steps
-
+check allTerminate4
