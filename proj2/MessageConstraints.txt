@@ -1,0 +1,23 @@
+Restrictions on messages: 
+
+-> outbox: 
+  - the outbox of a node can only contain pending messages belonging to 
+    that node and sending messages belonging to the current leader DONE
+
+  - if a node has a message in its outbox that belongs to the leader 
+    then: that node is a member and it has received that message DONE
+
+-> rcvrs: 
+  - nodes cannot receive their own messages DONE
+	
+-> sending messages: 
+  - must have rcvrs; DONE
+  - must be in someone's outbox DONE
+  
+-> pending messages: 
+  - must have no rcvrs; DONE
+  - exist only in their sender's outbox DONE
+  
+-> sent messages: 
+  - must have rcvrs; DONE
+  - must be in no one's outbox DONE

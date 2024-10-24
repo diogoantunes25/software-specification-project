@@ -71,6 +71,8 @@ fact {
 	// Member.(Leader.lnxt) = members pointed to by someone
 	lone (LQueue - Member.(Leader.lnxt))
 
+	// A member is only pointed at by one person
+
 	// ===============================================
 	// Member Queue constraints
 
@@ -83,7 +85,7 @@ fact {
 	// Only non-member is member queues
 	all m: Member | no (MQueue[m] & Member)
 
-	// Only one starrts in member queue
+	// Only one starts in member queue
 	all m: Member | lone (MQueue[m] - Node.(m.qnxt))
 
 	// Queues are disjoint
@@ -94,7 +96,7 @@ fact {
 fact {
 
 	// ===============================================
-	// SentMsg constraints
+	// PendingMSg constraints
 
 	// Pending messages are only in outbox of sender
 	all m: PendingMsg | outbox.m = m.sndr
@@ -105,8 +107,21 @@ fact {
 	// ===============================================
 	// SendingMsg constraints
 
-	// Sending messages are in some outbox that not of the sender
-	// all m: SendingMsg | some (outbox.m - m.sndr)
+	// Sending messages are in some outbox
+	all m: SendingMsg | some outbox.m
+
+
+	// NOTE: this was required by the contraints on messages on the textfile
+	// provided in the course page. However, I only add a node to the receivers
+	// list on redirect, not on send, so this doesn't hold (this decision resulted
+	// from an initial interpretation of the project statement)
+	// Alternatively, this could be added. For that, the broadcast would add the
+	// receivers to the node and so would the redirect. However, the redirect
+	// would only do it if the receipient was not the leader (to ensure that leader
+	// is not in receivers of message). Here is the constraint if it was to be added
+	// All sending message have some receivers
+	// rcvrs.Node = all message with some receiver
+	// no (SendingMsg - rcvrs.Node)
 
 	// Sending messages haven't been received by sender
 	all m: SendingMsg | m.sndr not in m.rcvrs
@@ -117,28 +132,25 @@ fact {
 	// ===============================================
 	// SentMsg constraints
 
-	// Sent messages are in not outbox
+	// Sent messages are in no outbox
 	no outbox.SentMsg
-
-	// Sent messages have been received by leader
-	all m: SentMsg | m.sndr in m.rcvrs
 
 	// Sent messages have been received by someone that is not the leader
 	// This disallows sending messages to oneself
-	// FIXME: check if this is needed
 	all m: SentMsg | some m.rcvrs - m.sndr
 
 	// ===============================================
 	// Other constraints
 
+	// Node can't receive their own messages
+	all m: Msg | no (m.rcvrs & m.sndr)
+
 	// A message can only be in one outbox
 	all m: Msg | lone outbox.m
 
-	// If a not pending message is in someone outbox, then it the node has received the message
-	// In other words, the outbox of a node minus the pending is a subset of what he has received
-	// all n: Node | (n.outbox - PendingMsg) in rcvrs.n
-
-	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
+	// A node can only be non-member if its outbox has no sending messages
+	// in other words, nodes can't leave the ring with sending messages
+	no (Node - Member).outbox - PendingMsg
 }
 
 run example1 {

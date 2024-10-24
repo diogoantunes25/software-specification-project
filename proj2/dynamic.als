@@ -1,5 +1,3 @@
-module dynamic
-
 sig Node {
 	// Pending messages from node + sending messages from other nodes
 	var outbox: set Msg
@@ -20,19 +18,16 @@ var one sig Leader in Member {
 }
 
 // Set of nodes in leader queue
-// FIXME: turn to function
 var sig LQueue in Member {}
 
 // Tail of leader queue
-// FIXME: lone instead of one probably
-fun LTail: one Member {
+fun LTail: lone Member {
 	// Member.(Leader.lxt) -> nodes to whom someone points
 	LQueue - Member.(Leader.lnxt)
 }
 
 // Head of leader queue
-// FIXME: lone instead of one
-fun LHead: one Member {
+fun LHead: lone Member {
 	(Leader.lnxt).Leader
 }
 
@@ -42,8 +37,7 @@ fun MQueue[m: Member]: set Node {
 }
 
 // Tail in member queue
-// FIXME: lone instead of one probably
-fun MTail[m: Member]: one Node {
+fun MTail[m: Member]: lone Node {
 	// Node.(m.qnxt) -> nodes to whom someone points
 	MQueue[m] - Node.(m.qnxt)
 }
@@ -57,7 +51,6 @@ abstract sig Msg {
 }
 
 // Possible message states (there are no other states)
-// FIXME: why can't I use extends
 var sig SentMsg, SendingMsg, PendingMsg in Msg {}
 
 // Member queue arcs
@@ -70,13 +63,14 @@ fun ArcInLeaderQueue: Member -> lone Member {
 	Leader.lnxt
 }
 
+// Auxiliary definitions to understand what happened
+// at each step
 abstract sig Step {}
 one sig BroadcastTermStep, RedirectStep, BrodcastInitStep, MemberExitStep, LeaderPromotionStep, LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
 one sig StepState {
 	var s: Step
 }
 
-// TEMPORAL STUFF
 
 // Initial state
 pred init {
@@ -84,23 +78,25 @@ pred init {
 	Member = Leader
 	
 	// Ring is just the leader
-	Member.nxt = Member // FIXME: needed ?
+	Member.nxt = Member
 
 	// No one can want to be the leader
-	no lnxt // FIXME: needed ?
+	no lnxt
 	no LQueue
 
 	// All messages are pending
 	Msg = PendingMsg
+
 	// Pending messages are in the correct member
 	all n: Node | sndr.n = n.outbox
+
 	// No one received messages
 	no rcvrs
 
 	// No member is queueing to become a member
 	no qnxt
 
-	// FIXME: Message sets are disjoint
+	// Types of messages are disjoint
 	no SendingMsg & SentMsg
 	no SentMsg & PendingMsg
 	no PendingMsg & SendingMsg
@@ -138,7 +134,6 @@ pred trans {
 
 // Topology change state transformers
 pred topologyChange {
-	// FIXME: I can say Node - Member, but doesn't sound nice to have this here
 	some n: Node, m: Member | memberApplication[n,m]
 	or
 	some m: Member | memberPromotion[m]
@@ -152,13 +147,17 @@ pred topologyChange {
 	some m: Member | memberExit[m]
 }
 
-// Non-member n applies to become member by joining m's queue
-pred memberApplication[n: Node, m: Member] {
-	// Pre conditions
+pred memberApplicationEnabled[n: Node, m: Member] {
 	// node is not a member
 	n not in Member
 	// node is not already waiting to join in some queue
 	n not in (Member.qnxt).Node
+}
+
+// Non-member n applies to become member by joining m's queue
+pred memberApplication[n: Node, m: Member] {
+	// Pre conditions
+	memberApplicationEnabled[n,m]
 
 	// Post conditions
 	// if there was no queue, now there's a queue
@@ -182,11 +181,15 @@ pred memberApplication[n: Node, m: Member] {
 	StepState.s' = MemberApplicationStep
 }
 
+pred memberPromotionEnabled[m: Member] {
+	// there are nodes in member queue of m
+	some m.qnxt
+}
+
 // Member m promotes head of member queue to member
 pred memberPromotion[m: Member] {
 	// Pre conditions
-	// there are nodes in member queue of m
-	some m.qnxt
+	memberPromotionEnabled[m]
 
 	// Post conditions
 	// remove head from queue
@@ -218,10 +221,15 @@ pred memberPromotion[m: Member] {
 	StepState.s' = MemberPromotionStep
 }
 
+pred nonMemberExitEnabled[n: Node, m: Member] {
+	// node is a member queue
+	n in MQueue[m]
+}
+
 // Non-member n exists m's member queue
 pred nonMemberExit[n: Node, m: Member] {
 	// Pre conditions
-	n in MQueue[m]
+	nonMemberExitEnabled[n,m]
 
 	// Post conditions
 
@@ -247,10 +255,15 @@ pred nonMemberExit[n: Node, m: Member] {
 	StepState.s' = NonMemberExitStep
 }
 
+pred leaderApplicationEnabled[m: Member] {
+	m not in (Leader + LQueue)
+}
+
 // Member m applies to be the leader
 pred leaderApplication[m: Member] {
 	// Pre conditions
-	m not in (Leader + LQueue)
+	leaderApplicationEnabled[m]
+
 
 	// Post conditions
 	LQueue' = LQueue + m
@@ -272,15 +285,19 @@ pred leaderApplication[m: Member] {
 	StepState.s' = LeaderApplicationStep
 }
 
-// m becomes the new leader
-pred leaderPromotion[m: Member] {
-	// Pre conditions
+pred leaderPromotionEnabled[m: Member] {
 	// member is the head of the queue
 	m = LHead
 	// no ongoing broadcasts
 	no SendingMsg
 	// leader has sent all its messages
 	no (Leader.outbox & PendingMsg)
+}
+
+// m becomes the new leader
+pred leaderPromotion[m: Member] {
+	// Pre conditions
+	leaderPromotionEnabled[m]
 
 	// Post conditions
 	// head is the new leader
@@ -306,9 +323,7 @@ pred leaderPromotion[m: Member] {
 	StepState.s' = LeaderPromotionStep
 }
 
-// m exits the ring
-pred memberExit[m: Member] {
-	// Pre conditions
+pred memberExitEnabled[m: Member] {
 	// m is not the leader
 	m not in Leader
 	// m is not in the leader queue
@@ -317,6 +332,14 @@ pred memberExit[m: Member] {
 	no m.qnxt
 	// all its messages are sent
 	sndr.m in SentMsg
+	// it has no redirect responsibilities
+	no m.outbox
+}
+
+// m exits the ring
+pred memberExit[m: Member] {
+	// Pre conditions
+	memberExitEnabled[m]
 
 	// Post conditions
 	// previous points to next
@@ -348,15 +371,19 @@ pred messageRoute {
 	some msg: Msg | broadcastTerm[msg]
 }
 
-// Leader sends message to next node
-pred broadcastInit[msg: Msg] {
-	// Pre conditions
+pred broadcastInitEnabled[msg: Msg] {
 	// message is pending
 	msg in PendingMsg
 	// message is from leader
 	msg.sndr = Leader
 	// the ring is not just the leader
 	some Member - Leader
+}
+
+// Leader sends message to next node
+pred broadcastInit[msg: Msg] {
+	// Pre conditions
+	broadcastInitEnabled[msg]
 
 	// Post conditions
 	// message is not sending
@@ -382,15 +409,19 @@ pred broadcastInit[msg: Msg] {
 	StepState.s' = BrodcastInitStep
 }
 
-// member m redirects msg to next node
-pred redirect[m: Member, msg: Msg] {
-	// Pre conditions
+pred redirectEnabled[m: Member, msg: Msg] {
 	// message should have been broadcasted
 	msg in SendingMsg
 	// message should be in members outbox
 	msg in m.outbox
 	// member can't be the sender
 	m != msg.sndr
+}
+
+// member m redirects msg to next node
+pred redirect[m: Member, msg: Msg] {
+	// Pre conditions
+	redirectEnabled[m,msg]
 
 	// Post conditions
 	// only member gets new message and it's msg
@@ -416,17 +447,21 @@ pred redirect[m: Member, msg: Msg] {
 	StepState.s' = RedirectStep
 }
 
-// leader receives back one of the previous messages
-pred broadcastTerm[msg: Msg] {
-	// Pre conditions
+pred broadcastTermEnabled[msg: Msg] {
 	// message broadcast should be ongoing
 	msg in SendingMsg
 	// message should be in leader's outbox
 	msg in Leader.outbox
+}
+
+// leader receives back one of the previous messages
+pred broadcastTerm[msg: Msg] {
+	// Pre conditions
+	broadcastTermEnabled[msg]
 
 	// Post conditions
 	// only leader gets new message and it's msg
-	rcvrs' = rcvrs + (msg -> Leader)
+	// rcvrs' = rcvrs + (msg -> Leader)
 	// message is removed from members outbox
 	outbox' = outbox - (Leader -> msg)
 	// message has now been sent
@@ -442,6 +477,7 @@ pred broadcastTerm[msg: Msg] {
 	nxt' = nxt
 	qnxt' = qnxt
 	lnxt' = lnxt
+	rcvrs' = rcvrs
 
 	StepState.s' = BroadcastTermStep
 }
@@ -455,20 +491,40 @@ fact {
 	system
 }
 
-run example {
+// first example
+run example1 {
 	// at least one leader promotion
-	eventually some m: Member | leaderPromotion[m]
+	some m: Member | eventually leaderPromotion[m]
 
 	// at least one member promotion
-	eventually some m: Member | memberPromotion[m]
+	some n: Node | eventually memberPromotion[n]
 
 	// at least one member exit
-	eventually some m: Member | memberExit[m]
+	some n: Node | eventually memberExit[n]
 
-	// at least one non-member exist
-	eventually some n: Node, m: Member | nonMemberExit[n,m]
+	// at least one non-member exits
+	some n: Node, m: Member | eventually nonMemberExit[n,m]
 
 	// eventually  one complete broadcast
 	eventually some SentMsg
 } for exactly 5 Node, exactly 3 Msg, 20 steps
+
+// second example
+//run example2 {
+//	// at least one leader promotion
+//	some m: Member | eventually leaderPromotion[m]
+//
+//	// at least one member promotion
+//	some n: Node | eventually memberPromotion[n]
+//
+//	// at least one member exit
+//	some n: Node | eventually memberExit[n]
+//
+//	// at least one non-member exits
+//	some n: Node, m: Member | eventually nonMemberExit[n,m]
+//
+//	// eventually two complete broadcast
+//	eventually SentMsg = Msg
+//} for exactly 5 Node, exactly 2 Msg, 20 steps
+
 

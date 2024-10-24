@@ -1,5 +1,3 @@
-module dynamic
-
 sig Node {
 	// Pending messages from node + sending messages from other nodes
 	var outbox: set Msg
@@ -20,19 +18,16 @@ var one sig Leader in Member {
 }
 
 // Set of nodes in leader queue
-// FIXME: turn to function
 var sig LQueue in Member {}
 
 // Tail of leader queue
-// FIXME: lone instead of one probably
-fun LTail: one Member {
+fun LTail: lone Member {
 	// Member.(Leader.lxt) -> nodes to whom someone points
 	LQueue - Member.(Leader.lnxt)
 }
 
 // Head of leader queue
-// FIXME: lone instead of one
-fun LHead: one Member {
+fun LHead: lone Member {
 	(Leader.lnxt).Leader
 }
 
@@ -42,8 +37,7 @@ fun MQueue[m: Member]: set Node {
 }
 
 // Tail in member queue
-// FIXME: lone instead of one probably
-fun MTail[m: Member]: one Node {
+fun MTail[m: Member]: lone Node {
 	// Node.(m.qnxt) -> nodes to whom someone points
 	MQueue[m] - Node.(m.qnxt)
 }
@@ -57,7 +51,6 @@ abstract sig Msg {
 }
 
 // Possible message states (there are no other states)
-// FIXME: why can't I use extends
 var sig SentMsg, SendingMsg, PendingMsg in Msg {}
 
 // Member queue arcs
@@ -70,13 +63,14 @@ fun ArcInLeaderQueue: Member -> lone Member {
 	Leader.lnxt
 }
 
+// Auxiliary definitions to understand what happened
+// at each step
 abstract sig Step {}
 one sig BroadcastTermStep, RedirectStep, BrodcastInitStep, MemberExitStep, LeaderPromotionStep, LeaderApplicationStep, NonMemberExitStep, MemberPromotionStep, MemberApplicationStep, StutterStep, InitStep extends Step {}
 one sig StepState {
 	var s: Step
 }
 
-// TEMPORAL STUFF
 
 // Initial state
 pred init {
@@ -84,23 +78,25 @@ pred init {
 	Member = Leader
 	
 	// Ring is just the leader
-	Member.nxt = Member // FIXME: needed ?
+	Member.nxt = Member
 
 	// No one can want to be the leader
-	no lnxt // FIXME: needed ?
+	no lnxt
 	no LQueue
 
 	// All messages are pending
 	Msg = PendingMsg
+
 	// Pending messages are in the correct member
 	all n: Node | sndr.n = n.outbox
+
 	// No one received messages
 	no rcvrs
 
 	// No member is queueing to become a member
 	no qnxt
 
-	// FIXME: Message sets are disjoint
+	// Types of messages are disjoint
 	no SendingMsg & SentMsg
 	no SentMsg & PendingMsg
 	no PendingMsg & SendingMsg
@@ -138,7 +134,6 @@ pred trans {
 
 // Topology change state transformers
 pred topologyChange {
-	// FIXME: I can say Node - Member, but doesn't sound nice to have this here
 	some n: Node, m: Member | memberApplication[n,m]
 	or
 	some m: Member | memberPromotion[m]
@@ -167,7 +162,7 @@ pred memberApplication[n: Node, m: Member] {
 	// Post conditions
 	// if there was no queue, now there's a queue
 	no (m.qnxt) implies m.qnxt' = (n -> m) + m.qnxt
-			    else m.qnxt' = (n -> MTail[m]) + m.qnxt	
+			    else m.qnxt' = (n -> MTail[m]) + m.qnxt
 
 	// Frame conditions
 	Member' = Member
@@ -226,10 +221,15 @@ pred memberPromotion[m: Member] {
 	StepState.s' = MemberPromotionStep
 }
 
+pred nonMemberExitEnabled[n: Node, m: Member] {
+	// node is a member queue
+	n in MQueue[m]
+}
+
 // Non-member n exists m's member queue
 pred nonMemberExit[n: Node, m: Member] {
 	// Pre conditions
-	n in MQueue[m]
+	nonMemberExitEnabled[n,m]
 
 	// Post conditions
 
@@ -263,6 +263,7 @@ pred leaderApplicationEnabled[m: Member] {
 pred leaderApplication[m: Member] {
 	// Pre conditions
 	leaderApplicationEnabled[m]
+
 
 	// Post conditions
 	LQueue' = LQueue + m
@@ -322,9 +323,7 @@ pred leaderPromotion[m: Member] {
 	StepState.s' = LeaderPromotionStep
 }
 
-// m exits the ring
-pred memberExit[m: Member] {
-	// Pre conditions
+pred memberExitEnabled[m: Member] {
 	// m is not the leader
 	m not in Leader
 	// m is not in the leader queue
@@ -333,6 +332,14 @@ pred memberExit[m: Member] {
 	no m.qnxt
 	// all its messages are sent
 	sndr.m in SentMsg
+	// it has no redirect responsibilities
+	no m.outbox
+}
+
+// m exits the ring
+pred memberExit[m: Member] {
+	// Pre conditions
+	memberExitEnabled[m]
 
 	// Post conditions
 	// previous points to next
@@ -409,7 +416,6 @@ pred redirectEnabled[m: Member, msg: Msg] {
 	msg in m.outbox
 	// member can't be the sender
 	m != msg.sndr
-
 }
 
 // member m redirects msg to next node
@@ -455,7 +461,7 @@ pred broadcastTerm[msg: Msg] {
 
 	// Post conditions
 	// only leader gets new message and it's msg
-	rcvrs' = rcvrs + (msg -> Leader)
+	// rcvrs' = rcvrs + (msg -> Leader)
 	// message is removed from members outbox
 	outbox' = outbox - (Leader -> msg)
 	// message has now been sent
@@ -471,6 +477,7 @@ pred broadcastTerm[msg: Msg] {
 	nxt' = nxt
 	qnxt' = qnxt
 	lnxt' = lnxt
+	rcvrs' = rcvrs
 
 	StepState.s' = BroadcastTermStep
 }
@@ -505,6 +512,8 @@ pred topologyValid {
 	// Member.(Leader.lnxt) = members pointed to by someone
 	lone (LQueue - Member.(Leader.lnxt))
 
+	// A member is only pointed at by one person
+
 	// ===============================================
 	// Member Queue constraints
 
@@ -517,7 +526,7 @@ pred topologyValid {
 	// Only non-member is member queues
 	all m: Member | no (MQueue[m] & Member)
 
-	// Only one starrts in member queue
+	// Only one starts in member queue
 	all m: Member | lone (MQueue[m] - Node.(m.qnxt))
 
 	// Queues are disjoint
@@ -528,7 +537,7 @@ pred topologyValid {
 pred messageValid {
 
 	// ===============================================
-	// SentMsg constraints
+	// PendingMSg constraints
 
 	// Pending messages are only in outbox of sender
 	all m: PendingMsg | outbox.m = m.sndr
@@ -539,6 +548,22 @@ pred messageValid {
 	// ===============================================
 	// SendingMsg constraints
 
+	// Sending messages are in some outbox
+	all m: SendingMsg | some outbox.m
+
+
+	// NOTE: this was required by the contraints on messages on the textfile
+	// provided in the course page. However, I only add a node to the receivers
+	// list on redirect, not on send, so this doesn't hold (this decision resulted
+	// from an initial interpretation of the project statement)
+	// Alternatively, this could be added. For that, the broadcast would add the
+	// receivers to the node and so would the redirect. However, the redirect
+	// would only do it if the receipient was not the leader (to ensure that leader
+	// is not in receivers of message). Here is the constraint if it was to be added
+	// All sending message have some receivers
+	// rcvrs.Node = all message with some receiver
+	// no (SendingMsg - rcvrs.Node)
+
 	// Sending messages haven't been received by sender
 	all m: SendingMsg | m.sndr not in m.rcvrs
 
@@ -548,28 +573,25 @@ pred messageValid {
 	// ===============================================
 	// SentMsg constraints
 
-	// Sent messages are in not outbox
+	// Sent messages are in no outbox
 	no outbox.SentMsg
-
-	// Sent messages have been received by leader
-	all m: SentMsg | m.sndr in m.rcvrs
 
 	// Sent messages have been received by someone that is not the leader
 	// This disallows sending messages to oneself
-	// FIXME: check if this is needed
 	all m: SentMsg | some m.rcvrs - m.sndr
 
 	// ===============================================
 	// Other constraints
 
+	// Node can't receive their own messages
+	all m: Msg | no (m.rcvrs & m.sndr)
+
 	// A message can only be in one outbox
 	all m: Msg | lone outbox.m
 
-	// If a not pending message is in someone outbox, then it the node has received the message
-	// In other words, the outbox of a node minus the pending is a subset of what he has received
-	// all n: Node | (n.outbox - PendingMsg) in rcvrs.n
-
-	// FIXME: can a non-member have sending msg in outbox? (left while had sending messages in outbox)
+	// A node can only be non-member if its outbox has no sending messages
+	// in other words, nodes can't leave the ring with sending messages
+	no (Node - Member).outbox - PendingMsg
 }
 
 pred valid {
@@ -647,7 +669,6 @@ pred atLeastTwoNodes {
 }
 
 // all broadcasts terminate
-// FIXME: all broadcasts terminate or all messages are sent ?
 pred allBroadcastsTerminate {
 	eventually Msg = SentMsg
 }
@@ -666,6 +687,14 @@ fact {
 
 // check validityInvariant
 
+// confirm non triviality of antecedent of validityInvariant
+// run example {} for exactly 5 Node, 3 Msg
+
 // check allTerminate3a
 
+//run example {
+//	atLeastTwoNodes and fairness and noExit
+// }
+
+// yields the counter example
 check allTerminate4
